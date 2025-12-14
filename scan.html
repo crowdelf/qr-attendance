@@ -2,21 +2,27 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <title>Сканирование</title>
+    <title>Сканирование QR</title>
     <link rel="stylesheet" href="style.css">
-    <script src="https://cdn.jsdelivr.net/npm/jsqr/dist/jsQR.js"></script>
 </head>
+
 <body onload="startScanner()">
+
 <div class="container">
     <h1>Сканирование QR-кода</h1>
 
-    <video id="video" style="width: 100%; border-radius: 10px;"></video>
+    <video id="video" width="300" height="300" autoplay></video>
 
-    <p id="message" class="message"></p>
+    <div id="scanResult" class="result"></div>
 
     <button onclick="location.href='index.html'">Назад</button>
 </div>
 
+<!-- ОБЯЗАТЕЛЬНО СНАЧАЛА jsQR -->
+<script src="https://cdn.jsdelivr.net/npm/jsqr/dist/jsQR.js"></script>
+
+<!-- ПОТОМ твой JS -->
 <script src="script.js"></script>
+
 </body>
 </html>
