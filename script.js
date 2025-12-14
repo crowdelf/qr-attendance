@@ -1,4 +1,24 @@
-// --- Генерация QR-кода с поддержкой кириллицы ---
+function encodeBase64(str) {
+    return btoa(unescape(encodeURIComponent(str)));
+}
+
+function decodeBase64(str) {
+    return decodeURIComponent(escape(atob(str)));
+}
+
+
+function getCurrentDateTime() {
+    const now = new Date();
+    return now.toLocaleString();
+}
+
+
+function getCurrentDate() {
+    const now = new Date();
+    return now.toLocaleDateString();
+}
+
+
 function generateQR() {
     const fio = document.getElementById("fio").value.trim();
     const group = document.getElementById("group").value.trim();
@@ -8,112 +28,124 @@ function generateQR() {
         return;
     }
 
-    const data = JSON.stringify({ fio, group });
+    const studentData = { fio, group };
 
-    // Очистка контейнера
-    const qrContainer = document.getElementById("qrcode");
-    qrContainer.innerHTML = "";
+    const jsonString = JSON.stringify(studentData);
+    const encodedData = encodeBase64(jsonString);
 
-    // Кодируем текст в UTF-8
-    const utf8Data = unescape(encodeURIComponent(data));
+    const canvas = document.getElementById("qrCanvas");
 
-    // Генерация QR
-    new QRCode(qrContainer, {
-        text: utf8Data,
-        width: 250,
-        height: 250,
-        colorDark : "#000000",
-        colorLight : "#ffffff",
-        correctLevel : QRCode.CorrectLevel.H
+    QRCode.toCanvas(canvas, encodedData, { width: 250 }, function (error) {
+        if (error) {
+            console.error(error);
+            alert("Ошибка генерации QR-кода");
+        }
     });
-
-    // Сохраняем студента в localStorage
-    const students = JSON.parse(localStorage.getItem("students") || "[]");
-    students.push({ fio, group });
-    localStorage.setItem("students", JSON.stringify(students));
 }
 
 
-
-// --- Сканирование QR-кода с камеры ---
 function startScanner() {
     const video = document.getElementById("video");
+    const scanResult = document.getElementById("scanResult");
 
     navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } })
         .then(stream => {
             video.srcObject = stream;
             video.setAttribute("playsinline", true);
             video.play();
-            scanLoop();
+
+            const canvas = document.createElement("canvas");
+            const context = canvas.getContext("2d");
+
+            function scan() {
+                if (video.readyState === video.HAVE_ENOUGH_DATA) {
+                    canvas.width = video.videoWidth;
+                    canvas.height = video.videoHeight;
+                    context.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+                    const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
+                    const code = jsQR(imageData.data, canvas.width, canvas.height);
+
+                    if (code) {
+                        try {
+                            const decodedString = decodeBase64(code.data);
+                            const student = JSON.parse(decodedString);
+
+                            const result = saveVisit(student.fio, student.group);
+
+                            if (result === "saved") {
+                                scanResult.innerHTML = `
+                                    ✅ Посещение зафиксировано<br>
+                                    <strong>${student.fio}</strong><br>
+                                    Группа: ${student.group}
+                                `;
+                            } else {
+                                scanResult.innerHTML = `
+                                    ⚠️ Посещение уже зафиксировано сегодня<br>
+                                    <strong>${student.fio}</strong>
+                                `;
+                            }
+
+                            stream.getTracks().forEach(track => track.stop());
+                            return;
+                        } catch (e) {
+                            console.error("Ошибка декодирования", e);
+                        }
+                    }
+                }
+                requestAnimationFrame(scan);
+            }
+
+            scan();
+        })
+        .catch(err => {
+            console.error(err);
+            alert("Не удалось получить доступ к камере");
         });
 }
 
-function scanLoop() {
-    const video = document.getElementById("video");
-    const canvas = document.createElement("canvas");
 
-    if (video.readyState === video.HAVE_ENOUGH_DATA) {
-        canvas.width = video.videoWidth;
-        canvas.height = video.videoHeight;
-        const ctx = canvas.getContext("2d");
-        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-
-        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-        const code = jsQR(imageData.data, canvas.width, canvas.height);
-
-        if (code) {
-            handleScan(code.data);
-            return;
-        }
-    }
-
-    requestAnimationFrame(scanLoop);
-}
-
-function handleScan(data) {
-    try {
-        // Декодируем UTF-8 обратно в строку
-        const decoded = decodeURIComponent(escape(data));
-        const obj = JSON.parse(decoded);
-
-        const fio = obj.fio;
-        const group = obj.group;
-
-        const visits = JSON.parse(localStorage.getItem("visits") || "[]");
-        const date = new Date();
-
-        visits.push({
-            fio,
-            group,
-            date: date.toLocaleDateString(),
-            time: date.toLocaleTimeString()
-        });
-
-        localStorage.setItem("visits", JSON.stringify(visits));
-
-        document.getElementById("message").innerText =
-            `Посещение зафиксировано: ${fio} (${group})`;
-
-    } catch {
-        alert("QR-код не распознан!");
-    }
-}
-
-
-
-// --- Таблица посещений ---
-function loadVisits() {
-    const table = document.getElementById("visitsTable");
+function saveVisit(fio, group) {
     const visits = JSON.parse(localStorage.getItem("visits") || "[]");
+    const today = getCurrentDate();
 
-    visits.forEach(v => {
+    const alreadyVisited = visits.some(v =>
+        v.fio === fio &&
+        v.group === group &&
+        v.date === today
+    );
+
+    if (alreadyVisited) {
+        return "exists";
+    }
+
+    visits.push({
+        fio: fio,
+        group: group,
+        date: today,
+        datetime: getCurrentDateTime()
+    });
+
+    localStorage.setItem("visits", JSON.stringify(visits));
+    return "saved";
+}
+
+
+function loadVisits() {
+    const tableBody = document.getElementById("visitsTable");
+    if (!tableBody) return;
+
+    const visits = JSON.parse(localStorage.getItem("visits") || "[]");
+    tableBody.innerHTML = "";
+
+    visits.forEach((visit, index) => {
         const row = document.createElement("tr");
         row.innerHTML = `
-            <td>${v.fio}</td>
-            <td>${v.group}</td>
-            <td>${v.date}</td>
-            <td>${v.time}</td>
+            <td>${index + 1}</td>
+            <td>${visit.fio}</td>
+            <td>${visit.group}</td>
+            <td>${visit.datetime}</td>
         `;
-        table.appendChild(row);
+        tableBody.appendChild(row);
     });
 }
