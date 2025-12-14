@@ -1,6 +1,4 @@
-/***********************
- * BASE64 (РУССКИЙ ЯЗЫК)
- ***********************/
+/*************** BASE64 (РУССКИЙ ЯЗЫК) ***************/
 function encodeBase64(str) {
     return btoa(unescape(encodeURIComponent(str)));
 }
@@ -9,20 +7,7 @@ function decodeBase64(str) {
     return decodeURIComponent(escape(atob(str)));
 }
 
-/***********************
- * ДАТА И ВРЕМЯ
- ***********************/
-function getCurrentDate() {
-    return new Date().toLocaleDateString();
-}
-
-function getCurrentDateTime() {
-    return new Date().toLocaleString();
-}
-
-/***********************
- * ГЕНЕРАЦИЯ QR
- ***********************/
+/*************** ГЕНЕРАЦИЯ QR ***************/
 function generateQR() {
     const fio = document.getElementById("fio").value.trim();
     const group = document.getElementById("group").value.trim();
@@ -32,15 +17,16 @@ function generateQR() {
         return;
     }
 
-    const data = encodeBase64(JSON.stringify({ fio, group }));
+    const data = encodeBase64(`${fio}||${group}`);
     const canvas = document.getElementById("qrCanvas");
 
-    QRCode.toCanvas(canvas, data, { width: 250 });
+    QRCode.toCanvas(canvas, data, {
+        width: 280,
+        margin: 2
+    });
 }
 
-/***********************
- * СКАНИРОВАНИЕ QR
- ***********************/
+/*************** СКАНИРОВАНИЕ QR ***************/
 function startScanner() {
     const video = document.getElementById("video");
     const result = document.getElementById("scanResult");
@@ -49,77 +35,68 @@ function startScanner() {
         video: { facingMode: "environment" }
     }).then(stream => {
         video.srcObject = stream;
+        video.setAttribute("playsinline", true);
         video.play();
 
         const canvas = document.createElement("canvas");
         const ctx = canvas.getContext("2d");
 
-        function tick() {
-            if (video.readyState === video.HAVE_ENOUGH_DATA) {
-                canvas.width = video.videoWidth;
-                canvas.height = video.videoHeight;
-                ctx.drawImage(video, 0, 0);
+        function scan() {
+            if (video.videoWidth === 0) {
+                requestAnimationFrame(scan);
+                return;
+            }
 
-                const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-                const code = jsQR(imageData.data, canvas.width, canvas.height);
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-                if (code) {
-                    try {
-                        const decoded = JSON.parse(decodeBase64(code.data));
-                        const status = saveVisit(decoded.fio, decoded.group);
+            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            const code = jsQR(imageData.data, canvas.width, canvas.height, {
+                inversionAttempts: "attemptBoth"
+            });
 
-                        if (status === "saved") {
-                            result.innerHTML = `✅ Посещение зафиксировано<br>
-                            <b>${decoded.fio}</b><br>Группа: ${decoded.group}`;
-                        } else {
-                            result.innerHTML = `⚠️ Уже отмечен сегодня<br>
-                            <b>${decoded.fio}</b>`;
-                        }
+            if (code) {
+                try {
+                    const decoded = decodeBase64(code.data);
+                    const [fio, group] = decoded.split("||");
 
-                        stream.getTracks().forEach(t => t.stop());
-                        return;
-                    } catch (e) {
-                        console.error("Ошибка чтения QR", e);
-                    }
+                    saveVisit(fio, group);
+
+                    result.innerHTML = `
+                        ✅ Посещение зафиксировано<br>
+                        <b>${fio}</b><br>
+                        Группа: ${group}
+                    `;
+
+                    stream.getTracks().forEach(t => t.stop());
+                    return;
+                } catch (e) {
+                    console.error("Ошибка чтения QR", e);
                 }
             }
-            requestAnimationFrame(tick);
+
+            requestAnimationFrame(scan);
         }
-        tick();
+
+        scan();
     }).catch(() => {
-        alert("Камера недоступна");
+        alert("Не удалось открыть камеру");
     });
 }
 
-/***********************
- * СОХРАНЕНИЕ ПОСЕЩЕНИЯ
- ***********************/
+/*************** ХРАНЕНИЕ ПОСЕЩЕНИЙ ***************/
 function saveVisit(fio, group) {
     const visits = JSON.parse(localStorage.getItem("visits") || "[]");
-    const today = getCurrentDate();
-
-    const exists = visits.some(v =>
-        v.fio === fio &&
-        v.group === group &&
-        v.date === today
-    );
-
-    if (exists) return "exists";
-
     visits.push({
         fio,
         group,
-        date: today,
-        time: getCurrentDateTime()
+        time: new Date().toLocaleString()
     });
-
     localStorage.setItem("visits", JSON.stringify(visits));
-    return "saved";
 }
 
-/***********************
- * ЗАГРУЗКА ТАБЛИЦЫ
- ***********************/
+/*************** ВЫВОД ПОСЕЩЕНИЙ ***************/
 function loadVisits() {
     const table = document.getElementById("visitsTable");
     if (!table) return;
