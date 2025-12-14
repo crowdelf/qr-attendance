@@ -1,117 +1,119 @@
-/*************** BASE64 (РУССКИЙ ЯЗЫК) ***************/
-function encodeBase64(str) {
-    return btoa(unescape(encodeURIComponent(str)));
-}
-
-function decodeBase64(str) {
-    return decodeURIComponent(escape(atob(str)));
-}
-
-/*************** ГЕНЕРАЦИЯ QR ***************/
+// --- Генерация QR-кода с поддержкой кириллицы ---
 function generateQR() {
     const fio = document.getElementById("fio").value.trim();
     const group = document.getElementById("group").value.trim();
 
     if (!fio || !group) {
-        alert("Введите ФИО и группу");
+        alert("Введите ФИО и группу!");
         return;
     }
 
-    const data = encodeBase64(`${fio}||${group}`);
-    const canvas = document.getElementById("qrCanvas");
+    const data = JSON.stringify({ fio, group });
 
-    QRCode.toCanvas(canvas, data, {
-        width: 280,
-        margin: 2
+    // Очистка контейнера
+    const qrContainer = document.getElementById("qrcode");
+    qrContainer.innerHTML = "";
+
+    // Кодируем текст в UTF-8
+    const utf8Data = unescape(encodeURIComponent(data));
+
+    // Генерация QR
+    new QRCode(qrContainer, {
+        text: utf8Data,
+        width: 250,
+        height: 250,
+        colorDark : "#000000",
+        colorLight : "#ffffff",
+        correctLevel : QRCode.CorrectLevel.H
     });
+
+    // Сохраняем студента в localStorage
+    const students = JSON.parse(localStorage.getItem("students") || "[]");
+    students.push({ fio, group });
+    localStorage.setItem("students", JSON.stringify(students));
 }
 
-/*************** СКАНИРОВАНИЕ QR ***************/
+
+
+// --- Сканирование QR-кода с камеры ---
 function startScanner() {
     const video = document.getElementById("video");
-    const result = document.getElementById("scanResult");
 
-    navigator.mediaDevices.getUserMedia({
-        video: { facingMode: "environment" }
-    }).then(stream => {
-        video.srcObject = stream;
-        video.setAttribute("playsinline", true);
-        video.play();
+    navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } })
+        .then(stream => {
+            video.srcObject = stream;
+            video.setAttribute("playsinline", true);
+            video.play();
+            scanLoop();
+        });
+}
 
-        const canvas = document.createElement("canvas");
+function scanLoop() {
+    const video = document.getElementById("video");
+    const canvas = document.createElement("canvas");
+
+    if (video.readyState === video.HAVE_ENOUGH_DATA) {
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
         const ctx = canvas.getContext("2d");
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-        function scan() {
-            if (video.videoWidth === 0) {
-                requestAnimationFrame(scan);
-                return;
-            }
+        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        const code = jsQR(imageData.data, canvas.width, canvas.height);
 
-            canvas.width = video.videoWidth;
-            canvas.height = video.videoHeight;
-            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-
-            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-            const code = jsQR(imageData.data, canvas.width, canvas.height, {
-                inversionAttempts: "attemptBoth"
-            });
-
-            if (code) {
-                try {
-                    const decoded = decodeBase64(code.data);
-                    const [fio, group] = decoded.split("||");
-
-                    saveVisit(fio, group);
-
-                    result.innerHTML = `
-                        ✅ Посещение зафиксировано<br>
-                        <b>${fio}</b><br>
-                        Группа: ${group}
-                    `;
-
-                    stream.getTracks().forEach(t => t.stop());
-                    return;
-                } catch (e) {
-                    console.error("Ошибка чтения QR", e);
-                }
-            }
-
-            requestAnimationFrame(scan);
+        if (code) {
+            handleScan(code.data);
+            return;
         }
+    }
 
-        scan();
-    }).catch(() => {
-        alert("Не удалось открыть камеру");
-    });
+    requestAnimationFrame(scanLoop);
 }
 
-/*************** ХРАНЕНИЕ ПОСЕЩЕНИЙ ***************/
-function saveVisit(fio, group) {
-    const visits = JSON.parse(localStorage.getItem("visits") || "[]");
-    visits.push({
-        fio,
-        group,
-        time: new Date().toLocaleString()
-    });
-    localStorage.setItem("visits", JSON.stringify(visits));
+function handleScan(data) {
+    try {
+        // Декодируем UTF-8 обратно в строку
+        const decoded = decodeURIComponent(escape(data));
+        const obj = JSON.parse(decoded);
+
+        const fio = obj.fio;
+        const group = obj.group;
+
+        const visits = JSON.parse(localStorage.getItem("visits") || "[]");
+        const date = new Date();
+
+        visits.push({
+            fio,
+            group,
+            date: date.toLocaleDateString(),
+            time: date.toLocaleTimeString()
+        });
+
+        localStorage.setItem("visits", JSON.stringify(visits));
+
+        document.getElementById("message").innerText =
+            `Посещение зафиксировано: ${fio} (${group})`;
+
+    } catch {
+        alert("QR-код не распознан!");
+    }
 }
 
-/*************** ВЫВОД ПОСЕЩЕНИЙ ***************/
+
+
+// --- Таблица посещений ---
 function loadVisits() {
     const table = document.getElementById("visitsTable");
-    if (!table) return;
-
     const visits = JSON.parse(localStorage.getItem("visits") || "[]");
-    table.innerHTML = "";
 
-    visits.forEach((v, i) => {
-        table.innerHTML += `
-            <tr>
-                <td>${i + 1}</td>
-                <td>${v.fio}</td>
-                <td>${v.group}</td>
-                <td>${v.time}</td>
-            </tr>
+    visits.forEach(v => {
+        const row = document.createElement("tr");
+        row.innerHTML = `
+            <td>${v.fio}</td>
+            <td>${v.group}</td>
+            <td>${v.date}</td>
+            <td>${v.time}</td>
         `;
+        table.appendChild(row);
     });
 }
