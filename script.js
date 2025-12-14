@@ -1,4 +1,13 @@
-// Генерация QR
+/*************** BASE64 (РУССКИЙ ЯЗЫК) ***************/
+function encodeBase64(str) {
+    return btoa(unescape(encodeURIComponent(str)));
+}
+
+function decodeBase64(str) {
+    return decodeURIComponent(escape(atob(str)));
+}
+
+/*************** ГЕНЕРАЦИЯ QR ***************/
 function generateQR() {
     const fio = document.getElementById("fio").value.trim();
     const group = document.getElementById("group").value.trim();
@@ -8,68 +17,95 @@ function generateQR() {
         return;
     }
 
-    const data = JSON.stringify({
-        fio: fio,
-        group: group
-    });
+    const data = encodeBase64(`${fio}||${group}`);
+    const canvas = document.getElementById("qrCanvas");
 
-    const qrDiv = document.getElementById("qr");
-    qrDiv.innerHTML = "";
-
-    new QRCode(qrDiv, {
-        text: data,
-        width: 250,
-        height: 250,
-        correctLevel: QRCode.CorrectLevel.H
+    QRCode.toCanvas(canvas, data, {
+        width: 280,
+        margin: 2
     });
 }
 
-// Сканирование QR
+/*************** СКАНИРОВАНИЕ QR ***************/
 function startScanner() {
+    const video = document.getElementById("video");
     const result = document.getElementById("scanResult");
 
-    const html5QrCode = new Html5Qrcode("reader");
+    navigator.mediaDevices.getUserMedia({
+        video: { facingMode: "environment" }
+    }).then(stream => {
+        video.srcObject = stream;
+        video.setAttribute("playsinline", true);
+        video.play();
 
-    html5QrCode.start(
-        { facingMode: "environment" },
-        { fps: 10, qrbox: 250 },
-        (decodedText) => {
-            const student = JSON.parse(decodedText);
+        const canvas = document.createElement("canvas");
+        const ctx = canvas.getContext("2d");
 
-            saveVisit(student.fio, student.group);
+        function scan() {
+            if (video.videoWidth === 0) {
+                requestAnimationFrame(scan);
+                return;
+            }
 
-            result.innerHTML = `
-                <p style="color:green;">
-                ✅ Посещение зафиксировано<br>
-                <b>${student.fio}</b><br>${student.group}
-                </p>
-            `;
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-            html5QrCode.stop();
+            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            const code = jsQR(imageData.data, canvas.width, canvas.height, {
+                inversionAttempts: "attemptBoth"
+            });
+
+            if (code) {
+                try {
+                    const decoded = decodeBase64(code.data);
+                    const [fio, group] = decoded.split("||");
+
+                    saveVisit(fio, group);
+
+                    result.innerHTML = `
+                        ✅ Посещение зафиксировано<br>
+                        <b>${fio}</b><br>
+                        Группа: ${group}
+                    `;
+
+                    stream.getTracks().forEach(t => t.stop());
+                    return;
+                } catch (e) {
+                    console.error("Ошибка чтения QR", e);
+                }
+            }
+
+            requestAnimationFrame(scan);
         }
-    );
+
+        scan();
+    }).catch(() => {
+        alert("Не удалось открыть камеру");
+    });
 }
 
-// Сохранение посещения
+/*************** ХРАНЕНИЕ ПОСЕЩЕНИЙ ***************/
 function saveVisit(fio, group) {
     const visits = JSON.parse(localStorage.getItem("visits") || "[]");
-
     visits.push({
-        fio: fio,
-        group: group,
+        fio,
+        group,
         time: new Date().toLocaleString()
     });
-
     localStorage.setItem("visits", JSON.stringify(visits));
 }
 
-// Загрузка таблицы
+/*************** ВЫВОД ПОСЕЩЕНИЙ ***************/
 function loadVisits() {
     const table = document.getElementById("visitsTable");
+    if (!table) return;
+
     const visits = JSON.parse(localStorage.getItem("visits") || "[]");
+    table.innerHTML = "";
 
     visits.forEach((v, i) => {
-        const row = `
+        table.innerHTML += `
             <tr>
                 <td>${i + 1}</td>
                 <td>${v.fio}</td>
@@ -77,6 +113,5 @@ function loadVisits() {
                 <td>${v.time}</td>
             </tr>
         `;
-        table.innerHTML += row;
     });
 }

@@ -5,22 +5,24 @@
     <title>Сканирование QR</title>
     <link rel="stylesheet" href="style.css">
 </head>
-<body>
-<div class="container">
-    <h1>Сканирование QR</h1>
 
-    <div id="reader"></div>
+<body onload="startScanner()">
+
+<div class="container">
+    <h1>Сканирование QR-кода</h1>
+
+    <video id="video" autoplay></video>
+
     <div id="scanResult"></div>
 
-    <a class="btn secondary" href="index.html">Назад</a>
+    <button onclick="location.href='index.html'">Назад</button>
 </div>
 
-<!-- ❗ html5-qrcode -->
-<script src="https://unpkg.com/html5-qrcode"></script>
+<!-- ВАЖНО: СНАЧАЛА jsQR -->
+<script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
+
+<!-- ПОТОМ ТВОЙ КОД -->
 <script src="script.js"></script>
 
-<script>
-    startScanner();
-</script>
 </body>
 </html>
