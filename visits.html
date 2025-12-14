@@ -5,28 +5,27 @@
     <title>Посещения</title>
     <link rel="stylesheet" href="style.css">
 </head>
-<body>
+<body onload="loadVisits()">
 <div class="container">
     <h1>Журнал посещений</h1>
 
     <table>
-        <thead>
         <tr>
-            <th>№</th>
             <th>ФИО</th>
             <th>Группа</th>
-            <th>Дата и время</th>
+            <th>Дата</th>
+            <th>Время</th>
         </tr>
-        </thead>
         <tbody id="visitsTable"></tbody>
     </table>
 
-    <a class="btn secondary" href="index.html">Назад</a>
+    <button onclick="localStorage.removeItem('visits'); location.reload();">
+        Очистить журнал
+    </button>
+
+    <button onclick="location.href='index.html'">Назад</button>
 </div>
 
 <script src="script.js"></script>
-<script>
-    loadVisits();
-</script>
 </body>
 </html>

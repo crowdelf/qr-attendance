@@ -4,22 +4,49 @@
     <meta charset="UTF-8">
     <title>Генерация QR</title>
     <link rel="stylesheet" href="style.css">
+    <!-- Рабочая библиотека с поддержкой UTF-8 -->
+    <script src="https://cdn.jsdelivr.net/npm/qrcode/build/qrcode.min.js"></script>
 </head>
 <body>
 <div class="container">
     <h1>Генерация QR-кода</h1>
 
-    <input id="fio" placeholder="ФИО">
-    <input id="group" placeholder="Группа">
+    <input type="text" id="fio" placeholder="ФИО">
+    <input type="text" id="group" placeholder="Группа">
 
-    <button class="btn" onclick="generateQR()">Сгенерировать QR</button>
+    <button onclick="generateQR()">Сгенерировать</button>
 
-    <div id="qr"></div>
+    <canvas id="qrCanvas" class="qr-box"></canvas>
 
-    <a class="btn secondary" href="index.html">Назад</a>
+    <button onclick="location.href='index.html'">Назад</button>
 </div>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-<script src="script.js"></script>
+<script>
+function generateQR() {
+    const fio = document.getElementById("fio").value.trim();
+    const group = document.getElementById("group").value.trim();
+
+    if (!fio || !group) {
+        alert("Введите ФИО и группу!");
+        return;
+    }
+
+    const data = JSON.stringify({ fio, group });
+
+    const canvas = document.getElementById("qrCanvas");
+
+    QRCode.toCanvas(canvas, data, { width: 250 }, function (error) {
+        if (error) {
+            console.error(error);
+            alert("Ошибка при генерации QR-кода");
+        } else {
+            // Сохраняем студента
+            const students = JSON.parse(localStorage.getItem("students") || "[]");
+            students.push({ fio, group });
+            localStorage.setItem("students", JSON.stringify(students));
+        }
+    });
+}
+</script>
 </body>
 </html>
