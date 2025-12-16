@@ -1,4 +1,3 @@
-// --- Генерация QR-кода с поддержкой кириллицы ---
 function generateQR() {
     const fio = document.getElementById("fio").value.trim();
     const group = document.getElementById("group").value.trim();
@@ -10,42 +9,36 @@ function generateQR() {
 
     const data = JSON.stringify({ fio, group });
 
-    // Очистка контейнера
     const qrContainer = document.getElementById("qrcode");
     qrContainer.innerHTML = "";
 
-    // Кодируем текст в UTF-8
-    const utf8Data = unescape(encodeURIComponent(data));
-
-    // Генерация QR
     new QRCode(qrContainer, {
-        text: utf8Data,
+        text: data,
         width: 250,
         height: 250,
-        colorDark : "#000000",
-        colorLight : "#ffffff",
-        correctLevel : QRCode.CorrectLevel.H
+        colorDark: "#000000",
+        colorLight: "#ffffff",
+        correctLevel: QRCode.CorrectLevel.H
     });
 
-    // Сохраняем студента в localStorage
     const students = JSON.parse(localStorage.getItem("students") || "[]");
     students.push({ fio, group });
     localStorage.setItem("students", JSON.stringify(students));
 }
 
-
-
-// --- Сканирование QR-кода с камеры ---
 function startScanner() {
     const video = document.getElementById("video");
 
-    navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } })
-        .then(stream => {
-            video.srcObject = stream;
-            video.setAttribute("playsinline", true);
-            video.play();
-            scanLoop();
-        });
+    navigator.mediaDevices.getUserMedia({
+        video: { facingMode: "environment" }
+    }).then(stream => {
+        video.srcObject = stream;
+        video.setAttribute("playsinline", true);
+        video.play();
+        scanLoop();
+    }).catch(() => {
+        alert("Не удалось получить доступ к камере");
+    });
 }
 
 function scanLoop() {
@@ -55,6 +48,7 @@ function scanLoop() {
     if (video.readyState === video.HAVE_ENOUGH_DATA) {
         canvas.width = video.videoWidth;
         canvas.height = video.videoHeight;
+
         const ctx = canvas.getContext("2d");
         ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
@@ -72,13 +66,9 @@ function scanLoop() {
 
 function handleScan(data) {
     try {
-        // Декодируем UTF-8 обратно в строку
-        const decoded = decodeURIComponent(escape(data));
-        const obj = JSON.parse(decoded);
+        const obj = JSON.parse(data);
 
-        const fio = obj.fio;
-        const group = obj.group;
-
+        const { fio, group } = obj;
         const visits = JSON.parse(localStorage.getItem("visits") || "[]");
         const date = new Date();
 
@@ -94,16 +84,15 @@ function handleScan(data) {
         document.getElementById("message").innerText =
             `Посещение зафиксировано: ${fio} (${group})`;
 
-    } catch {
+    } catch (e) {
         alert("QR-код не распознан!");
     }
 }
 
-
-
-// --- Таблица посещений ---
 function loadVisits() {
     const table = document.getElementById("visitsTable");
+    table.innerHTML = "";
+
     const visits = JSON.parse(localStorage.getItem("visits") || "[]");
 
     visits.forEach(v => {
